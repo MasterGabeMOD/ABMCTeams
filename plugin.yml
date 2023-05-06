@@ -1,0 +1,9 @@
+main: server.alanbecker.net.Main
+name: ABMCTeams
+version: 1
+api-version: 1.19
+folia-supported: true
+commands:
+  teams:
+    description: Manage and join teams
+    usage: /teams or /teams join [color]
