@@ -7,10 +7,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+
 import java.io.File;
-import org.bukkit.Bukkit;
-
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -20,7 +18,7 @@ public class Main extends JavaPlugin {
 
     private PlayerData playerData;
     private Map<String, Team> teams;
-    private int teamSizeLimit = 12;
+    private int teamSizeLimit = 50;
 
     @Override
     public void onEnable() {
@@ -32,7 +30,7 @@ public class Main extends JavaPlugin {
     }
 
     private void updateOnlinePlayerDisplayNames() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
+        for (Player player : getServer().getOnlinePlayers()) {
             for (String teamName : teams.keySet()) {
                 Team team = teams.get(teamName);
                 if (team.containsPlayer(player.getName())) {
@@ -43,7 +41,6 @@ public class Main extends JavaPlugin {
         }
     }
 
-    
     private FileConfiguration loadPlayerData() {
         File playerDataFile = new File(getDataFolder(), "playerdata.yml");
         if (!playerDataFile.exists()) {
@@ -51,7 +48,6 @@ public class Main extends JavaPlugin {
         }
         return YamlConfiguration.loadConfiguration(playerDataFile);
     }
-
 
     private void createTeams() {
         String[] colors = {"red", "blue", "green", "yellow", "orange", "purple", "gray"};
@@ -61,6 +57,7 @@ public class Main extends JavaPlugin {
             teams.put(colors[i], new Team(colors[i], chatColors[i]));
         }
     }
+
     private void assignPlayersToTeams() {
         for (String teamName : teams.keySet()) {
             Team team = teams.get(teamName);
@@ -78,8 +75,12 @@ public class Main extends JavaPlugin {
                 listTeams(sender);
             } else if (args.length == 2 && args[0].equalsIgnoreCase("join") && sender instanceof Player) {
                 joinTeam((Player) sender, args[1].toLowerCase());
+            } else if (args.length == 2 && args[0].equalsIgnoreCase("switch") && sender instanceof Player) {
+                switchTeam((Player) sender, args[1].toLowerCase());
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("leave") && sender instanceof Player) {
+                leaveTeam((Player) sender);
             } else {
-                sender.sendMessage(ChatColor.RED + "Invalid usage. Use /teams or /teams join [color].");
+                sender.sendMessage(ChatColor.RED + "Invalid usage. Use /teams, /teams join [color], /teams switch [color], or /teams leave.");
             }
             return true;
         }
@@ -106,8 +107,6 @@ public class Main extends JavaPlugin {
         }
     }
 
-
-
     private void joinTeam(Player player, String teamName) {
         if (teams.containsKey(teamName)) {
             Team team = teams.get(teamName);
@@ -115,13 +114,14 @@ public class Main extends JavaPlugin {
                 player.sendMessage(ChatColor.RED + "You are already in this team.");
                 return;
             }
-            for (Team otherTeam : teams.values()) {
-                if (otherTeam.containsPlayer(player.getName())) {
-                    player.sendMessage(ChatColor.RED + "You cannot switch teams.");
-                    return;
-                }
-            }
             if (team.getPlayerCount() < teamSizeLimit) {
+                for (Team otherTeam : teams.values()) {
+                    if (otherTeam.containsPlayer(player.getName())) {
+                        otherTeam.removePlayer(player.getName());
+                        playerData.removePlayerFromTeam(player, otherTeam.getName());
+                        break;
+                    }
+                }
                 team.addPlayer(player.getName());
                 playerData.addPlayerToTeam(player, teamName);
                 player.sendMessage(ChatColor.GREEN + "You have joined the " + team.getColor() + teamName + ChatColor.GREEN + " team.");
@@ -134,7 +134,45 @@ public class Main extends JavaPlugin {
         }
     }
 
+    private void switchTeam(Player player, String teamName) {
+        if (teams.containsKey(teamName)) {
+            Team team = teams.get(teamName);
+            if (team.containsPlayer(player.getName())) {
+                player.sendMessage(ChatColor.RED + "You are already in this team.");
+                return;
+            }
+            if (team.getPlayerCount() < teamSizeLimit) {
+                for (Team otherTeam : teams.values()) {
+                    if (otherTeam.containsPlayer(player.getName())) {
+                        otherTeam.removePlayer(player.getName());
+                        playerData.removePlayerFromTeam(player, otherTeam.getName());
+                        break;
+                    }
+                }
+                team.addPlayer(player.getName());
+                playerData.addPlayerToTeam(player, teamName);
+                player.sendMessage(ChatColor.GREEN + "You have switched to the " + team.getColor() + teamName + ChatColor.GREEN + " team.");
+                player.setDisplayName(team.getColor() + player.getName() + ChatColor.RESET);
+            } else {
+                player.sendMessage(ChatColor.RED + "This team is full.");
+            }
+        } else {
+            player.sendMessage(ChatColor.RED + "Invalid team name. Use /teams to see available teams.");
+        }
+    }
 
+    private void leaveTeam(Player player) {
+        for (Team team : teams.values()) {
+            if (team.containsPlayer(player.getName())) {
+                team.removePlayer(player.getName());
+                playerData.removePlayerFromTeam(player, team.getName());
+                player.sendMessage(ChatColor.GREEN + "You have left the " + team.getColor() + team.getName() + ChatColor.GREEN + " team.");
+                player.setDisplayName(ChatColor.RESET + player.getName());
+                return;
+            }
+        }
+        player.sendMessage(ChatColor.RED + "You are not currently in a team.");
+    }
 
     private class Team {
         private String name;
@@ -176,4 +214,3 @@ public class Main extends JavaPlugin {
         }
     }
 }
-
